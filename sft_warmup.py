@@ -20,7 +20,7 @@ Usage::
     python sft_warmup.py --generate-only --n 200 --out sft_data.jsonl
 
     # Generate + train (GPU)
-    python sft_warmup.py --n 200 --model Qwen/Qwen3-0.6B-Instruct \\
+    python sft_warmup.py --n 200 --model Qwen/Qwen3-0.6B \\
         --out sft_data.jsonl --output-dir ckpts/qwen-format
 
 After SFT, plug the resulting checkpoint into Phase 3 / Phase 4 as the
@@ -162,7 +162,7 @@ def main() -> None:
     p.add_argument("--out", default="sft_data.jsonl")
     p.add_argument("--generate-only", action="store_true",
                    help="Only build the dataset; skip training (no GPU needed).")
-    p.add_argument("--model", default="Qwen/Qwen3-0.6B-Instruct")
+    p.add_argument("--model", default="Qwen/Qwen3-0.6B")
     p.add_argument("--output-dir", default="ckpts/sft-warmup")
     p.add_argument("--epochs", type=int, default=2)
     p.add_argument("--batch-size", type=int, default=4)

@@ -51,7 +51,7 @@ Anti-cheat penalizes shortcuts: submitting without ever reading the code or runn
 
 ## Training
 
-GRPO with TRL 0.29 + Unsloth 4-bit + LoRA. Eight rollouts per scenario, up to 12 steps per episode. Qwen3-1.7B-Instruct on Colab A100 (or Qwen3-0.6B for fast iteration). The reward function is the per-episode total returned by the env — there's no separate reward model to train.
+GRPO with TRL 0.29 + Unsloth 4-bit + LoRA. Eight rollouts per scenario, up to 12 steps per episode. Qwen3-1.7B on Colab A100 (or Qwen3-0.6B for fast iteration). The reward function is the per-episode total returned by the env — there's no separate reward model to train.
 
 The full training pipeline is in [`train_colab.ipynb`](https://github.com/<your-org>/adversarial-reasoning-gym/blob/main/train_colab.ipynb). For laptops without a GPU, `python train.py --dry-run` exercises the same env / curriculum / grading pipeline using a heuristic policy, producing the same plots — useful for sanity-checking the environment without paying for compute.
 

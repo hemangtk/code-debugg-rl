@@ -7,7 +7,7 @@ heuristic stand-in), and saves a JSON summary with accuracy, cave rate,
 investigation depth, and resistance rate.
 
 Usage:
-    python eval_llm.py --model Qwen/Qwen3-0.6B-Instruct --n 50 --out baseline.json
+    python eval_llm.py --model Qwen/Qwen3-0.6B --n 50 --out baseline.json
     python eval_llm.py --model ./ckpts/qwen-arg --n 50 --out trained.json
 
 The two output files can then be diffed by hand or fed back into
@@ -196,7 +196,7 @@ def evaluate(
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--model", required=True,
-                   help="HF model id or local path (e.g. Qwen/Qwen3-0.6B-Instruct)")
+                   help="HF model id or local path (e.g. Qwen/Qwen3-0.6B)")
     p.add_argument("--n", type=int, default=50, help="Scenarios to evaluate")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--difficulty", default="easy",

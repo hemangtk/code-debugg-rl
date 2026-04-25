@@ -181,17 +181,17 @@ If you'd rather drive everything from the CLI without a notebook, the same flow 
 pytest tests/                                                          # §1
 python client.py                                                       # §2
 
-python eval_llm.py --model Qwen/Qwen3-0.6B-Instruct --n 50 --seed 42 \  # §3 baseline
+python eval_llm.py --model Qwen/Qwen3-0.6B --n 50 --seed 42 \           # §3 baseline
     --out baseline.json --log baseline_episodes.jsonl
 
-python sft_warmup.py --n 400 --model Qwen/Qwen3-0.6B-Instruct \         # §4 (optional)
+python sft_warmup.py --n 400 --model Qwen/Qwen3-0.6B \                  # §4 (optional)
     --output-dir ckpts/sft-warmup
 
-python train.py --model Qwen/Qwen3-0.6B-Instruct \                      # §5 sanity
+python train.py --model Qwen/Qwen3-0.6B \                               # §5 sanity
     --outer-iterations 30 --rollouts-per-iter 4 --num-generations 4 \
     --curriculum easy --output-dir ckpts/phase3-sanity
 
-python train.py --model Qwen/Qwen3-1.7B-Instruct \                      # §6 real (A100)
+python train.py --model Qwen/Qwen3-1.7B \                               # §6 real (A100)
     --outer-iterations 300 --rollouts-per-iter 8 --num-generations 8 \
     --curriculum phase4 --hub-repo your/qwen3-1.7b-arg \
     --output-dir ckpts/phase4-real
@@ -206,7 +206,7 @@ python plot_results.py --training-log phase4_train.jsonl --results results.json
 
 ## Training (GRPO + Unsloth)
 
-- **Base model**: Qwen3-1.7B-Instruct (or Qwen3-0.6B-Instruct for fast iteration)
+- **Base model**: Qwen3-1.7B (or Qwen3-0.6B for fast iteration)
 - **Algorithm**: GRPO via TRL 0.29+ with Unsloth 4-bit + LoRA
 - **Rollouts**: real multi-turn — each iteration collects K trajectories with the current policy, computes Monte-Carlo returns-to-go, and runs one GRPO update on the (state, action, return) examples
 - **Episode length**: up to 12 steps

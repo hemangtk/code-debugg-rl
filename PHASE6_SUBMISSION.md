@@ -136,7 +136,7 @@ huggingface-cli repo info <your-username>/qwen3-1.7b-arg --type=model
 ```
 
 Add a model card (`README.md` in the model repo) noting:
-- Base model: Qwen/Qwen3-1.7B-Instruct
+- Base model: Qwen/Qwen3-1.7B
 - Training: GRPO on Adversarial Reasoning Gym, 300 outer iterations
 - Headline numbers (acc up, cave down, depth up)
 - Link back to this Space + this GitHub repo

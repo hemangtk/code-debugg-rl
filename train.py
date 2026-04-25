@@ -429,7 +429,7 @@ def main() -> None:
     parser.add_argument("--num-episodes", type=int, default=200, help="(dry-run) episodes")
     parser.add_argument("--output-log", default="training_log.jsonl")
     parser.add_argument("--output-dir", default="checkpoints")
-    parser.add_argument("--model", default="Qwen/Qwen3-1.7B-Instruct")
+    parser.add_argument("--model", default="Qwen/Qwen3-1.7B")
     parser.add_argument("--num-generations", type=int, default=8)
     parser.add_argument("--rollouts-per-iter", type=int, default=8)
     parser.add_argument("--outer-iterations", type=int, default=50)
