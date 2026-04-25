@@ -419,6 +419,15 @@ def run_grpo_training(args) -> None:  # pragma: no cover - GPU-only path
         if (outer + 1) % args.save_every == 0:
             trainer.save_model(os.path.join(args.output_dir, f"iter-{outer+1}"))
 
+        # Free per-iter GRPOTrainer state. Without this, A10G fragments
+        # over ~5 iters and OOMs during generation even though peak
+        # working set fits.
+        del trainer
+        import gc
+        gc.collect()
+        import torch as _torch
+        _torch.cuda.empty_cache()
+
     if log_path:
         log_path.close()
     if episodes_path:

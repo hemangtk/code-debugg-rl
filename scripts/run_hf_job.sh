@@ -27,6 +27,10 @@ echo "  base_model=$BASE_MODEL stage=$STAGE outer=$OUTER_ITERATIONS"
 echo "  hub_repo=$HUB_REPO results_repo=$RESULTS_REPO"
 nvidia-smi || true
 
+# Reduce memory fragmentation from per-iter GRPOTrainer rebuilds. Without
+# this, A10G OOMs after a few iters even though peak allocations fit.
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
 cd /tmp
 git clone "$GITHUB_REPO_URL" code-debugg-rl
 cd code-debugg-rl
@@ -119,14 +123,18 @@ run_sanity() {
 run_grpo() {
   ensure_sft_warmup
   echo "=== [3/4] GRPO real (${OUTER_ITERATIONS} iters, staged) ==="
+  # num-generations dropped 6 -> 4 and rollouts 6 -> 4 vs original config:
+  # at 6 we OOMed on A10G after ~3 iters. 4 fits comfortably and still
+  # gives GRPO enough variance for group-relative advantage.
+  # save-every 25 -> 10 so partial progress survives crashes.
   python train.py \
     --model ./ckpts/sft-warmup \
-    --outer-iterations "$OUTER_ITERATIONS" --rollouts-per-iter 6 --num-generations 6 \
+    --outer-iterations "$OUTER_ITERATIONS" --rollouts-per-iter 4 --num-generations 4 \
     --max-new-tokens 256 --max-seq-length 2048 \
     --lr 1e-5 --grad-accum 4 --gamma 0.95 \
     --grpo-temperature 1.2 \
     --curriculum phase4 \
-    --save-every 25 \
+    --save-every 10 \
     --hub-repo "$HUB_REPO" \
     --output-dir ckpts/phase4-real \
     --output-log artifacts/phase4_train.jsonl \
