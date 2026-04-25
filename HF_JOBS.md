@@ -29,7 +29,7 @@ hf jobs run \
   --env GITHUB_REPO_URL=https://github.com/YOUR_GH_USERNAME/code-debugg-rl \
   --env STAGE=all \
   --env OUTER_ITERATIONS=100 \
-  pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime \
+  pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime \
   bash -lc "apt-get update -qq && apt-get install -y -qq ca-certificates git && git clone \$GITHUB_REPO_URL /tmp/bootstrap && bash /tmp/bootstrap/scripts/run_hf_job.sh"
 ```
 
@@ -50,7 +50,7 @@ hf jobs run --flavor a10g-large \
   --env HF_USER=hemangtk \
   --env GITHUB_REPO_URL=https://github.com/hemangtk/code-debugg-rl \
   --env STAGE=baseline \
-  pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime \
+  pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime \
   bash -lc "apt-get update -qq && apt-get install -y -qq ca-certificates git && git clone \$GITHUB_REPO_URL /tmp/bootstrap && bash /tmp/bootstrap/scripts/run_hf_job.sh"
 
 # Run only SFT — $0.35
