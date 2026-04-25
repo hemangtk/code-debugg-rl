@@ -1,5 +1,8 @@
 -r requirements.txt
-torch>=2.4.0
+# Note: torch is intentionally NOT pinned — the pytorch/pytorch base image
+# already provides it. Pinning it here invites torchvision mismatch (one
+# gets upgraded, the other doesn't). The script reinstalls torchvision
+# post-install to keep them in sync.
 transformers>=4.45.0
 accelerate>=0.34.0
 datasets>=3.0.0

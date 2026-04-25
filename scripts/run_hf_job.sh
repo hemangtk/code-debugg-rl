@@ -33,6 +33,21 @@ cd code-debugg-rl
 
 pip install --no-cache-dir -r requirements-train.txt
 
+# After the train deps install, torch may have been upgraded by transitive
+# deps (e.g. bitsandbytes pulls a newer torch) without upgrading torchvision.
+# transformers' image_utils unconditionally imports torchvision, which fails
+# with "operator torchvision::nms does not exist" if the versions diverge.
+# Reinstall torchvision matching whatever torch ended up installed.
+TORCH_VER=$(python -c 'import torch; print(torch.__version__.split("+")[0])')
+echo "[fix] reinstalling torchvision to match torch=$TORCH_VER"
+pip install --no-cache-dir --upgrade --force-reinstall --no-deps \
+  "torchvision" || echo "[warn] torchvision reinstall failed, continuing"
+
+# Quick smoke test that the stack imports cleanly before we burn GPU time.
+python -c "import torch, torchvision, transformers; \
+  print(f'torch={torch.__version__} tv={torchvision.__version__} tx={transformers.__version__}')" \
+  || { echo "[fatal] import smoke test failed"; exit 1; }
+
 mkdir -p artifacts ckpts
 
 run_sft() {
