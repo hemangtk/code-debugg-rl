@@ -30,7 +30,7 @@ hf jobs run \
   --env STAGE=all \
   --env OUTER_ITERATIONS=100 \
   pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime \
-  bash -lc "curl -sSL \$GITHUB_REPO_URL/raw/main/scripts/run_hf_job.sh | bash"
+  bash -lc "apt-get update -qq && apt-get install -y -qq curl ca-certificates && curl -sSL \$GITHUB_REPO_URL/raw/main/scripts/run_hf_job.sh | bash"
 ```
 
 Replace:
@@ -51,7 +51,7 @@ hf jobs run --flavor a10g-large \
   --env GITHUB_REPO_URL=https://github.com/hemangtk/code-debugg-rl.git \
   --env STAGE=baseline \
   pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime \
-  bash -lc "curl -sSL \$GITHUB_REPO_URL/raw/main/scripts/run_hf_job.sh | bash"
+  bash -lc "apt-get update -qq && apt-get install -y -qq curl ca-certificates && curl -sSL \$GITHUB_REPO_URL/raw/main/scripts/run_hf_job.sh | bash"
 
 # Run only SFT — $0.35
 ... --env STAGE=sft ...
