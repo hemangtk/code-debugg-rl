@@ -385,6 +385,16 @@ def run_grpo_training(args) -> None:  # pragma: no cover - GPU-only path
             args=config,
             train_dataset=ds,
         )
+        # Backup for Unsloth's `has_images` regression: trainer init
+        # generates unsloth_compiled_cache/UnslothGRPOTrainer.py, which
+        # references `has_images` without defining it in the text-only
+        # path. Inject a module-level default so the lookup resolves.
+        try:
+            import unsloth_compiled_cache.UnslothGRPOTrainer as _ugrpo
+            if not hasattr(_ugrpo, "has_images"):
+                _ugrpo.has_images = False
+        except ImportError:
+            pass
         trainer.train()
 
         # 3. Logging.
