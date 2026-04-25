@@ -5,7 +5,7 @@ Two modes:
 * ``--dry-run``: drives the environment with a heuristic policy to
   validate the full pipeline and emit a training_log.jsonl that the
   plotter can consume. No GPU required.
-* default: runs GRPO with TRL + Unsloth on a Qwen base model. Uses
+* default: runs GRPO with TRL + PEFT + bitsandbytes on a Qwen base. Uses
   proper multi-turn rollouts via ``server.rollout``: collect K
   trajectories with the current policy, build a per-step dataset of
   (state, action, return-to-go), then train one GRPO step on those
@@ -204,55 +204,69 @@ def _resolve_stage_difficulty(step: int, schedule: Optional[List[Dict]]) -> Opti
 
 
 def run_grpo_training(args) -> None:  # pragma: no cover - GPU-only path
+    # Plain TRL + PEFT + bitsandbytes. We used to use Unsloth for ~30%
+    # speed and lower memory, but its 2025.x line shipped multiple
+    # regressions that we couldn't dodge by version pinning alone
+    # (has_images NameError in 2025.9, auto_docstring NameError in 2025.8).
+    # Stable path: plain transformers + peft.
     try:
-        from unsloth import FastLanguageModel  # type: ignore
+        import torch
+        from transformers import (  # type: ignore
+            AutoModelForCausalLM,
+            AutoTokenizer,
+            BitsAndBytesConfig,
+        )
+        from peft import (  # type: ignore
+            LoraConfig,
+            get_peft_model,
+            prepare_model_for_kbit_training,
+        )
         from trl import GRPOConfig, GRPOTrainer  # type: ignore
         from datasets import Dataset  # type: ignore
     except ImportError as e:
         raise SystemExit(
-            "GRPO mode requires unsloth, trl, and datasets. "
-            "Install them on a CUDA machine and try again. (" + str(e) + ")"
+            "GRPO mode requires transformers, peft, trl, datasets, "
+            "bitsandbytes. Install them on a CUDA machine and try again. "
+            "(" + str(e) + ")"
         )
 
-    # vLLM's torch.compile path breaks on compute capability < 8.0 (T4 = 7.5)
-    # with "Tried to erase Node size_X but it still had N users". Auto-detect
-    # GPU + check vllm is installed; disable fast_inference if either fails.
-    fast_inference = args.fast_inference
-    if fast_inference is None:
-        try:
-            import torch as _torch
-            cc = _torch.cuda.get_device_capability(0)
-            is_ampere_plus = cc[0] >= 8
-        except Exception:
-            cc = (0, 0)
-            is_ampere_plus = False
-        try:
-            import vllm  # noqa: F401
-            has_vllm = True
-        except ImportError:
-            has_vllm = False
-        fast_inference = is_ampere_plus and has_vllm
-        if not fast_inference:
-            if not is_ampere_plus:
-                print(f"[train] GPU compute capability {cc[0]}.{cc[1]} < 8.0 — "
-                      "disabling vLLM fast_inference.")
-            elif not has_vllm:
-                print("[train] vllm package not installed — disabling fast_inference. "
-                      "(`pip install vllm` to enable; ~20% faster GRPO rollouts.)")
+    # bf16 needs Ampere+ (compute cap 8.0+); T4 (7.5) only does fp16.
+    supports_bf16 = (
+        torch.cuda.is_available()
+        and torch.cuda.get_device_capability(0)[0] >= 8
+    )
+    compute_dtype = torch.bfloat16 if supports_bf16 else torch.float16
 
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=args.model,
-        max_seq_length=args.max_seq_length,
+    print(f"[train] loading {args.model} in 4-bit (compute_dtype={compute_dtype})")
+    bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
-        fast_inference=fast_inference,
+        bnb_4bit_compute_dtype=compute_dtype,
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_quant_type="nf4",
     )
-    model = FastLanguageModel.get_peft_model(
-        model,
+    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    model = AutoModelForCausalLM.from_pretrained(
+        args.model,
+        quantization_config=bnb_config,
+        torch_dtype=compute_dtype,
+        trust_remote_code=True,
+        device_map="auto",
+    )
+    model = prepare_model_for_kbit_training(model)
+    peft_config = LoraConfig(
         r=16,
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
         lora_alpha=16,
-        use_gradient_checkpointing="unsloth",
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+        lora_dropout=0.0,
+        bias="none",
+        task_type="CAUSAL_LM",
     )
+    model = get_peft_model(model, peft_config)
+    model.gradient_checkpointing_enable()
+    model.config.use_cache = False
+    model.print_trainable_parameters()
 
     log_path = open(args.output_log, "w") if args.output_log else None
     episodes_path = open(args.episodes_log, "w") if args.episodes_log else None
@@ -345,28 +359,16 @@ def run_grpo_training(args) -> None:  # pragma: no cover - GPU-only path
         prompts = [{"prompt": ex["prompt"]} for ex in all_examples]
         ds = Dataset.from_list(prompts)
 
-        # T4 (Turing, compute capability 7.5) doesn't support bf16 — only
-        # Ampere+ does. Detect and fall back to fp16. Both are valid for
-        # GRPO; bf16 is just preferred when available for numerical range.
-        import torch as _torch
-        _supports_bf16 = (
-            _torch.cuda.is_available()
-            and _torch.cuda.get_device_capability(0)[0] >= 8
-        )
-        # Note: don't pass `max_prompt_length` — Unsloth 2025.9.x's
-        # GRPOConfig wrapper forwards it to a TRL GRPOConfig that doesn't
-        # accept the kwarg, causing TypeError at init. The default
-        # (model's max_seq_length) is fine for our prompts.
         config = GRPOConfig(
             output_dir=args.output_dir,
             num_generations=args.num_generations,
             max_completion_length=args.max_new_tokens,
             learning_rate=args.lr,
-            bf16=_supports_bf16,
-            fp16=not _supports_bf16,
-            per_device_train_batch_size=1,
+            bf16=supports_bf16,
+            fp16=not supports_bf16,
+            per_device_train_batch_size=args.num_generations,
             gradient_accumulation_steps=args.grad_accum,
-            max_steps=1,  # one training step per outer iteration
+            max_steps=1,
             save_steps=50,
             logging_steps=1,
             # Explicit sampling params — without these, post-SFT models that
@@ -385,16 +387,6 @@ def run_grpo_training(args) -> None:  # pragma: no cover - GPU-only path
             args=config,
             train_dataset=ds,
         )
-        # Backup for Unsloth's `has_images` regression: trainer init
-        # generates unsloth_compiled_cache/UnslothGRPOTrainer.py, which
-        # references `has_images` without defining it in the text-only
-        # path. Inject a module-level default so the lookup resolves.
-        try:
-            import unsloth_compiled_cache.UnslothGRPOTrainer as _ugrpo
-            if not hasattr(_ugrpo, "has_images"):
-                _ugrpo.has_images = False
-        except ImportError:
-            pass
         trainer.train()
 
         # 3. Logging.
@@ -432,32 +424,12 @@ def run_grpo_training(args) -> None:  # pragma: no cover - GPU-only path
     if episodes_path:
         episodes_path.close()
 
-    # === IMPORTANT: QLoRA save handling ===
-    # `trainer.save_model()` saves only the LoRA adapter on top of the
-    # 4-bit quantized base. That's the SAFE path — do NOT upcast the
-    # 4-bit base to fp16 and merge weights, that path is known to
-    # silently degrade quality (Unsloth docs flag this loudly).
-    #
-    # If you want a single merged fp16 model for inference, prefer:
-    #   model.save_pretrained_merged(args.output_dir, tokenizer,
-    #                                save_method="merged_16bit")
-    # which Unsloth handles correctly. For Hub uploads, push the adapter
-    # directly — consumers can apply it via PeftModel.from_pretrained.
+    # trainer.save_model writes the LoRA adapter on top of the 4-bit
+    # base. Consumers should reload via PeftModel.from_pretrained or the
+    # transformers PEFT auto-load path (AutoModelForCausalLM detects
+    # adapter_config.json and pulls in base_model_name_or_path).
     trainer.save_model(args.output_dir)
     print(f"Saved LoRA adapter to {args.output_dir}")
-    print("[note] To merge to fp16, use Unsloth's save_pretrained_merged")
-    print("       (do NOT manually upcast 4-bit -> fp16 then merge LoRA)")
-
-    if args.save_merged:
-        try:
-            model.save_pretrained_merged(
-                args.output_dir + "-merged",
-                tokenizer,
-                save_method="merged_16bit",
-            )
-            print(f"Saved merged fp16 model to {args.output_dir}-merged")
-        except Exception as e:
-            print(f"[warn] merged save failed: {e}")
 
     # Phase 4 step: optionally push final checkpoint to HF Hub.
     if args.hub_repo:
@@ -517,17 +489,6 @@ def main() -> None:
                         help="Per-rollout dump of generated completions for inspection.")
     parser.add_argument("--hub-repo", default=None,
                         help="If set, push final checkpoint to this HF Hub repo.")
-    parser.add_argument("--save-merged", action="store_true",
-                        help="Also save a merged fp16 model via Unsloth's "
-                             "save_pretrained_merged (safe path; do not "
-                             "manually upcast 4-bit then merge).")
-    parser.add_argument("--fast-inference", dest="fast_inference",
-                        action="store_true", default=None,
-                        help="Force vLLM fast_inference. Default: auto-detect "
-                             "(disabled on T4 / compute capability < 8.0).")
-    parser.add_argument("--no-fast-inference", dest="fast_inference",
-                        action="store_false",
-                        help="Force-disable vLLM fast_inference (e.g. on T4).")
     parser.add_argument("--grpo-temperature", type=float, default=1.0,
                         help="Sampling temperature for GRPO generations. "
                              "Bump to 1.2+ if completions collapse to "

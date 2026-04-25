@@ -9,8 +9,4 @@ datasets>=3.0.0
 peft>=0.13.0
 trl==0.29.0
 bitsandbytes>=0.44.0
-# unsloth 2025.9.x has a NameError regression in their GRPO trainer
-# (`has_images` referenced but not defined — leftover from VLM rename).
-# Pin below 2025.9 until upstream fixes it.
-unsloth>=2025.4.1,<2025.9
 huggingface_hub>=0.27.0
