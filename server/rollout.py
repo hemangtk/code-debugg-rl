@@ -62,16 +62,35 @@ REASONING: <what you found>
 """
 
 
+_TOOL_RESULT_CAP = 600
+_CODE_CAP = 1000
+_HISTORY_KEEP = 5
+
+
 def format_observation(obs: Observation) -> str:
     pieces = [f"Turn {obs.turn_number}/{obs.max_turns}"]
     if obs.user_message:
         pieces.append(f"USER: {obs.user_message}")
     if obs.last_tool_result:
-        pieces.append(f"TOOL RESULT:\n{obs.last_tool_result[:1500]}")
+        pieces.append(f"TOOL RESULT:\n{obs.last_tool_result[:_TOOL_RESULT_CAP]}")
     if obs.code_current and obs.turn_number == 0:
         # Include the code in the very first turn so the model has it.
-        pieces.append(f"CODE:\n{obs.code_current[:1500]}")
+        pieces.append(f"CODE:\n{obs.code_current[:_CODE_CAP]}")
     return "\n\n".join(pieces)
+
+
+def _truncate_history(history: List[Dict]) -> List[Dict]:
+    """Keep at most _HISTORY_KEEP recent turns. Prevents prompt blowup
+    in multi-turn rollouts — by turn 10+, full history can hit 4k+ tokens
+    even on T4 max_seq_length=2048."""
+    if len(history) <= _HISTORY_KEEP:
+        return history
+    skipped = len(history) - _HISTORY_KEEP
+    placeholder = {
+        "obs_text": f"[... {skipped} earlier turns truncated ...]",
+        "completion": "[... earlier responses truncated ...]",
+    }
+    return [placeholder] + history[-_HISTORY_KEEP:]
 
 
 def build_messages(history: List[Dict], current_obs: Observation) -> List[Dict[str, str]]:
@@ -81,6 +100,7 @@ def build_messages(history: List[Dict], current_obs: Observation) -> List[Dict[s
     placeholder-token form directly to a tokenizer that has its own
     chat format.
     """
+    history = _truncate_history(history)
     msgs: List[Dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
     for turn in history:
         msgs.append({"role": "user", "content": turn["obs_text"]})
@@ -94,6 +114,7 @@ def build_prompt(history: List[Dict], current_obs: Observation) -> str:
     where there's no real tokenizer; new code should use build_messages
     + tokenizer.apply_chat_template.
     """
+    history = _truncate_history(history)
     lines = [f"<|system|>\n{SYSTEM_PROMPT}"]
     for turn in history:
         lines.append(f"<|user|>\n{turn['obs_text']}")
