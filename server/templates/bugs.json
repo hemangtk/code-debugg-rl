@@ -1,0 +1,82 @@
+{
+  "off_by_one": {
+    "id": "off_by_one",
+    "name": "Off-by-one error",
+    "description": "Loop bound or index is +/-1 from the correct value",
+    "injection_method": "Replace range/index expression with +/-1 variant",
+    "typical_symptom": "Boundary value tests fail; first or last element handled wrong",
+    "difficulty_range": [0.3, 0.7]
+  },
+  "wrong_operator": {
+    "id": "wrong_operator",
+    "name": "Wrong operator",
+    "description": "Comparison or logical operator swapped (</<=, >/>=, +/-, and/or, in/not in)",
+    "injection_method": "Replace the operator with its near-twin",
+    "typical_symptom": "Logic takes wrong branch under specific input shape",
+    "difficulty_range": [0.2, 0.6]
+  },
+  "integer_division": {
+    "id": "integer_division",
+    "name": "Integer division",
+    "description": "// used where / is needed (or vice versa)",
+    "injection_method": "Swap / and //",
+    "typical_symptom": "Floats truncated or wrong type returned",
+    "difficulty_range": [0.3, 0.6]
+  },
+  "boundary_condition": {
+    "id": "boundary_condition",
+    "name": "Boundary condition",
+    "description": "Edge case (empty input, single element, zero, negative) not handled",
+    "injection_method": "Remove or invert the edge case guard",
+    "typical_symptom": "Edge tests fail while normal tests pass",
+    "difficulty_range": [0.2, 0.5]
+  },
+  "variable_shadowing": {
+    "id": "variable_shadowing",
+    "name": "Variable shadowing",
+    "description": "Inner-scope variable hides outer scope, wrong value referenced",
+    "injection_method": "Reuse a variable name in an inner scope",
+    "typical_symptom": "Specific paths return stale or unrelated values",
+    "difficulty_range": [0.6, 0.9]
+  },
+  "wrong_index": {
+    "id": "wrong_index",
+    "name": "Wrong index",
+    "description": "arr[i] vs arr[i-1] vs arr[i+1] confusion",
+    "injection_method": "Shift index by +/-1 or swap to wrong axis",
+    "typical_symptom": "Output shifted or IndexError on edges",
+    "difficulty_range": [0.4, 0.7]
+  },
+  "type_coercion": {
+    "id": "type_coercion",
+    "name": "Type coercion",
+    "description": "Missing or wrong type conversion",
+    "injection_method": "Remove a cast or compare across mixed types",
+    "typical_symptom": "TypeError or wrong-type output for some inputs",
+    "difficulty_range": [0.5, 0.8]
+  },
+  "missing_return": {
+    "id": "missing_return",
+    "name": "Missing return",
+    "description": "Code path returns None instead of the expected value",
+    "injection_method": "Remove a return statement or short-circuit a branch to False",
+    "typical_symptom": "Specific inputs return None or wrong default",
+    "difficulty_range": [0.4, 0.7]
+  },
+  "wrong_default": {
+    "id": "wrong_default",
+    "name": "Wrong default",
+    "description": "Default parameter or initial accumulator value is wrong",
+    "injection_method": "Change the initial value (0 vs 1 vs -inf, etc)",
+    "typical_symptom": "All outputs off by a constant or fail on boundary inputs",
+    "difficulty_range": [0.2, 0.6]
+  },
+  "accumulator_error": {
+    "id": "accumulator_error",
+    "name": "Accumulator error",
+    "description": "Accumulator updated with the wrong expression",
+    "injection_method": "Change what is added or which variable is updated",
+    "typical_symptom": "Outputs grow at wrong rate or stay stuck",
+    "difficulty_range": [0.4, 0.7]
+  }
+}

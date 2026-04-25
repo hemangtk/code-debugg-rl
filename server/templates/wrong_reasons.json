@@ -1,0 +1,76 @@
+{
+  "second_largest": {
+    "2": "The length check on line 2 uses < 1 instead of < 2. With a single-element list there's no actual 'second' element, so the function should bail out earlier. That's the real bug.",
+    "5": "Initializing second to float('-inf') is sketchy — when the input has duplicates of the largest, second never gets updated and we leak the sentinel value. Should initialize differently.",
+    "11": "The final return is doing ternary fallback to first, which masks the underlying issue. The real fix is to return None when second is still -inf and let the caller handle it."
+  },
+  "binary_search": {
+    "2": "The right pointer initialization uses len(arr) - 1 which is exclusive-style indexing mixed with inclusive comparison. That's the classic binary search off-by-one. We should use len(arr) and adjust the loop.",
+    "5": "The mid calculation (left + right) // 2 can overflow with very large arrays. Best practice is left + (right - left) // 2 to prevent integer overflow.",
+    "7": "The == check on line 7 compares with target directly without handling the case where arr might contain floats. We should be doing math.isclose or similar."
+  },
+  "flatten_list": {
+    "2": "Initializing result = [] inside the function means each recursive call creates a new list, which is fine for correctness but the issue is we should be threading a single accumulator through. That's why deep recursion drops elements.",
+    "7": "The append on line 7 doesn't deep-copy the item. For mutable nested values that's a bug — modifications to the original list later will mutate the flattened output."
+  },
+  "count_words": {
+    "2": "Initializing counts = {} inside the function and rebuilding each call is wasteful, but more importantly when text is empty we return the original empty dict reference which can be mutated. Should return a copy.",
+    "6": "The for-loop on line 6 doesn't strip punctuation from words. So 'hello,' and 'hello' are counted as different tokens. That's the bug.",
+    "11": "The final return on line 11 returns the dict in insertion order — if the caller expects sorted-by-frequency, this is wrong. Need to sort or use Counter."
+  },
+  "merge_sorted": {
+    "2": "Initializing result = [] is fine, but we never preallocate len(list1) + len(list2). For long lists this causes O(n) reallocations and the index math gets confused at boundaries.",
+    "3": "The i and j initializers on lines 3-4 should be combined to avoid scope issues. The fact that they're separate variables is what causes the off-by-one we're seeing.",
+    "18": "The final return doesn't validate the merged result is actually sorted. If the inputs aren't sorted to begin with, this silently produces wrong output."
+  },
+  "compound_discount": {
+    "2": "The result = price assignment on line 2 makes result and price aliased to the same int initially. Floating-point drift in subsequent multiplications gets amplified. Should explicitly cast to float.",
+    "3": "The for-loop on line 3 iterates through discounts but doesn't validate they're in valid range (0-100). Negative discounts or values > 100 produce nonsense.",
+    "5": "The round(result, 2) on line 5 introduces precision loss. For small prices this rounds away the actual answer."
+  },
+  "is_palindrome": {
+    "2": "Building cleaned by string concatenation in a loop is O(n^2) — for long strings this hits a recursion-like memory issue that manifests as wrong output.",
+    "6": "Initializing left and right as separate lines is fine but the issue is they should be initialized after cleaning to use len(cleaned), and somehow this is shadowing the earlier values.",
+    "13": "The final return True doesn't account for empty strings being palindromes by convention but the function may need to return None for that case."
+  },
+  "find_duplicates": {
+    "2": "Using a set for seen vs duplicates means hash collisions on certain inputs — for non-hashable items the function would crash. The bug is we should use a counter instead.",
+    "4": "The for loop on line 4 doesn't preserve insertion order. With Python 3.7+ sets do preserve some order, but sorted at the end masks the underlying issue.",
+    "9": "sorted(list(duplicates)) on line 9 is converting to list and then sorting, which mutates ordering. We should be returning duplicates as-is."
+  },
+  "running_average": {
+    "2": "The early return on empty list misses the case where nums has a single element — the average of [x] is x but the function isn't testing that path.",
+    "4": "Initializing result = [] doesn't preallocate. For long lists this hits memory fragmentation that manifests as floating-point drift in the averages.",
+    "9": "The final return doesn't handle precision. For long inputs, total/len accumulates rounding errors. Should use math.fsum."
+  },
+  "validate_brackets": {
+    "2": "Initializing stack = [] uses a list which is O(n) for arbitrary inserts. The bug is we should use collections.deque for O(1) push/pop. List behavior on certain inputs is just slow enough to hit timeouts.",
+    "5": "The for-loop doesn't validate ch is a string of length 1. If s contains multi-char tokens, the bracket detection is wrong.",
+    "13": "stack.pop() on line 13 doesn't return the popped value, so we lose track of what we popped. Should be using stack[-1] for matching."
+  },
+  "matrix_transpose": {
+    "2": "The 'if not matrix' check returns [] but doesn't handle [[]] (matrix with one empty row). That's the corner case we're hitting.",
+    "4": "The rows = len(matrix) on line 4 doesn't validate all rows have the same length. Jagged matrices produce IndexErrors later.",
+    "7": "The final return result doesn't ensure result is a deep copy. If the caller mutates it, original matrix changes too."
+  },
+  "caesar_cipher": {
+    "2": "The result = '' starts as an empty string and uses string concatenation in a loop. That's the O(n^2) bug — for long inputs the function exceeds memory.",
+    "3": "The for-loop iterates over characters but assumes ASCII. For unicode input the ord-based math is off by an unknowable offset.",
+    "12": "The final return doesn't validate the output is shifted by exactly `shift`. We should be asserting the inverse cipher round-trips."
+  },
+  "longest_common_prefix": {
+    "2": "The 'if not strs' early return on line 2 doesn't handle strs containing only empty strings. That edge case falls through to the main logic and breaks.",
+    "4": "Setting prefix = strs[0] is fragile — if strs[0] is the longest string, every other comparison shrinks it. We should pick the shortest string as the starting prefix.",
+    "10": "The final return prefix returns whatever's left, but doesn't verify it's actually a prefix of all input strings. The trim loop can over-trim in some cases."
+  },
+  "remove_duplicates_sorted": {
+    "2": "The early return 0 doesn't account for None being a valid 'no input'. We should distinguish empty list from None.",
+    "7": "arr[write] = arr[i] on line 7 mutates in place but doesn't return the trimmed list — only the length. Callers expect both.",
+    "9": "The final return write returns the count but the array beyond write index is now stale. Some callers truncate based on this and lose data."
+  },
+  "moving_average": {
+    "2": "The early return [] handles empty input but not window=0 correctly. The 'or window <= 0' should be a separate branch.",
+    "4": "Initializing result = [] uses a list — for large windows we should use a fixed-size buffer. List growth introduces drift.",
+    "10": "The final return result doesn't handle the case where window > len(nums). Should pad or raise."
+  }
+}
