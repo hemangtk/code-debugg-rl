@@ -119,6 +119,11 @@ def train_sft(args) -> None:  # pragma: no cover - GPU-only
     import torch
     dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
     model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=dtype)
+    if torch.cuda.is_available():
+        model.gradient_checkpointing_enable()
+        # gradient_checkpointing requires use_cache=False; otherwise HF prints a warning and silently disables it.
+        if hasattr(model, "config"):
+            model.config.use_cache = False
 
     print(f"[sft] loading dataset from {args.out}...")
     ds = load_dataset("json", data_files=args.out, split="train")
@@ -153,6 +158,11 @@ def train_sft(args) -> None:  # pragma: no cover - GPU-only
         logging_steps=10,
         save_steps=100,
         max_length=args.max_length,
+        gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
+        optim="adamw_torch_fused" if torch.cuda.is_available() else "adamw_torch",
+        dataloader_num_workers=0,
+        report_to="none",
     )
     trainer = SFTTrainer(
         model=model,
@@ -178,10 +188,13 @@ def main() -> None:
     p.add_argument("--model", default="Qwen/Qwen3-0.6B")
     p.add_argument("--output-dir", default="ckpts/sft-warmup")
     p.add_argument("--epochs", type=int, default=2)
-    p.add_argument("--batch-size", type=int, default=4)
-    p.add_argument("--grad-accum", type=int, default=2)
+    p.add_argument("--batch-size", type=int, default=1,
+                   help="Per-device batch. T4 with 0.6B + grad-checkpoint fits 1.")
+    p.add_argument("--grad-accum", type=int, default=8,
+                   help="Effective batch = batch_size * grad_accum.")
     p.add_argument("--lr", type=float, default=2e-5)
-    p.add_argument("--max-length", type=int, default=2048)
+    p.add_argument("--max-length", type=int, default=1024,
+                   help="Truncate to this many tokens. 1024 fits T4; 2048 needs A100.")
     args = p.parse_args()
 
     n = generate_sft_data(args.n, args.seed, args.out, args.difficulty)
