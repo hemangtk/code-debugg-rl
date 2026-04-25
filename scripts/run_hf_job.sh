@@ -43,19 +43,18 @@ export CC=gcc CXX=g++
 
 pip install --no-cache-dir -r requirements-train.txt
 
-# After the train deps install, torch may have been upgraded by transitive
-# deps (e.g. bitsandbytes pulls a newer torch) without upgrading torchvision.
-# transformers' image_utils unconditionally imports torchvision, which fails
-# with "operator torchvision::nms does not exist" if the versions diverge.
-# Reinstall torchvision matching whatever torch ended up installed.
-TORCH_VER=$(python -c 'import torch; print(torch.__version__.split("+")[0])')
-echo "[fix] reinstalling torchvision to match torch=$TORCH_VER"
-pip install --no-cache-dir --upgrade --force-reinstall --no-deps \
-  "torchvision" || echo "[warn] torchvision reinstall failed, continuing"
+# Uninstall torchvision entirely. We don't use image features, but
+# transformers/image_utils does `import torchvision` inside a try/except
+# that only catches ImportError — a *broken* torchvision (version mismatch
+# with torch from transitive deps like bitsandbytes) raises RuntimeError
+# ("operator torchvision::nms does not exist") which isn't caught and
+# crashes any transformers import. Cleanly removing it makes the
+# try/except behave correctly.
+pip uninstall -y torchvision || true
 
-# Quick smoke test that the stack imports cleanly before we burn GPU time.
-python -c "import torch, torchvision, transformers; \
-  print(f'torch={torch.__version__} tv={torchvision.__version__} tx={transformers.__version__}')" \
+# Smoke test the stack before we burn GPU time.
+python -c "import torch, transformers; \
+  print(f'torch={torch.__version__} tx={transformers.__version__}')" \
   || { echo "[fatal] import smoke test failed"; exit 1; }
 
 mkdir -p artifacts ckpts
