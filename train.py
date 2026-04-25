@@ -355,6 +355,14 @@ def run_grpo_training(args) -> None:  # pragma: no cover - GPU-only path
             max_steps=1,  # one training step per outer iteration
             save_steps=50,
             logging_steps=1,
+            # Explicit sampling params — without these, post-SFT models that
+            # are over-confident on the heuristic produce identical outputs
+            # across all `num_generations` completions, collapsing GRPO's
+            # group-relative advantage to zero. Symptom: reward_std=0,
+            # grad_norm=0, frac_reward_zero_std=1.0.
+            temperature=args.grpo_temperature,
+            top_p=0.95,
+            top_k=50,
         )
         trainer = GRPOTrainer(
             model=model,
@@ -496,6 +504,10 @@ def main() -> None:
     parser.add_argument("--no-fast-inference", dest="fast_inference",
                         action="store_false",
                         help="Force-disable vLLM fast_inference (e.g. on T4).")
+    parser.add_argument("--grpo-temperature", type=float, default=1.0,
+                        help="Sampling temperature for GRPO generations. "
+                             "Bump to 1.2+ if completions collapse to "
+                             "identical text (reward_std=0).")
     args = parser.parse_args()
 
     if args.dry_run:
