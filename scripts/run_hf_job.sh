@@ -60,6 +60,31 @@ python -c "import torch, torchvision, transformers; \
 
 mkdir -p artifacts ckpts
 
+# Pull the SFT checkpoint from the results repo if we don't already have
+# it locally. Lets STAGE=grpo / sanity / eval skip the (re)training of
+# SFT when a previous run already produced one.
+ensure_sft_warmup() {
+  if [ -f ckpts/sft-warmup/model.safetensors ]; then
+    echo "[setup] using existing ckpts/sft-warmup"
+    return
+  fi
+  echo "[setup] downloading sft-warmup from $RESULTS_REPO"
+  RESULTS_REPO="$RESULTS_REPO" python - <<'PY'
+import os
+from huggingface_hub import snapshot_download
+snapshot_download(
+    repo_id=os.environ["RESULTS_REPO"],
+    repo_type="model",
+    allow_patterns=["sft-warmup/*"],
+    local_dir="ckpts",
+)
+PY
+  if [ ! -f ckpts/sft-warmup/model.safetensors ]; then
+    echo "[fatal] failed to download sft-warmup from $RESULTS_REPO" >&2
+    exit 1
+  fi
+}
+
 run_sft() {
   echo "=== [1/4] SFT warmup ==="
   python sft_warmup.py --generate-only --n 400 --out sft_data.jsonl --seed 0
@@ -78,6 +103,7 @@ run_eval_base() {
 }
 
 run_sanity() {
+  ensure_sft_warmup
   echo "=== [2/4] GRPO sanity (30 iters, easy) ==="
   python train.py \
     --model ./ckpts/sft-warmup \
@@ -92,6 +118,7 @@ run_sanity() {
 }
 
 run_grpo() {
+  ensure_sft_warmup
   echo "=== [3/4] GRPO real (${OUTER_ITERATIONS} iters, staged) ==="
   python train.py \
     --model ./ckpts/sft-warmup \
@@ -146,7 +173,7 @@ trap push_artifacts_safe EXIT
 case "$STAGE" in
   sft)        run_sft ;;
   sanity)     run_sanity ;;
-  grpo)       run_grpo ;;
+  grpo)       run_grpo; run_eval_trained ;;
   eval)       run_eval_base; run_eval_trained ;;
   baseline)   run_eval_base ;;
   all)
