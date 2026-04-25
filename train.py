@@ -214,11 +214,26 @@ def run_grpo_training(args) -> None:  # pragma: no cover - GPU-only path
             "Install them on a CUDA machine and try again. (" + str(e) + ")"
         )
 
+    # vLLM's torch.compile path breaks on compute capability < 8.0 (T4 = 7.5)
+    # with "Tried to erase Node size_X but it still had N users". Auto-detect
+    # and disable fast_inference on those GPUs unless the user forces it.
+    fast_inference = args.fast_inference
+    if fast_inference is None:
+        try:
+            import torch as _torch
+            cc = _torch.cuda.get_device_capability(0)
+            fast_inference = cc[0] >= 8
+            if not fast_inference:
+                print(f"[train] GPU compute capability {cc[0]}.{cc[1]} < 8.0 — "
+                      "disabling vLLM fast_inference (use --fast-inference to override).")
+        except Exception:
+            fast_inference = False
+
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model,
         max_seq_length=args.max_seq_length,
         load_in_4bit=True,
-        fast_inference=True,
+        fast_inference=fast_inference,
     )
     model = FastLanguageModel.get_peft_model(
         model,
@@ -465,6 +480,13 @@ def main() -> None:
                         help="Also save a merged fp16 model via Unsloth's "
                              "save_pretrained_merged (safe path; do not "
                              "manually upcast 4-bit then merge).")
+    parser.add_argument("--fast-inference", dest="fast_inference",
+                        action="store_true", default=None,
+                        help="Force vLLM fast_inference. Default: auto-detect "
+                             "(disabled on T4 / compute capability < 8.0).")
+    parser.add_argument("--no-fast-inference", dest="fast_inference",
+                        action="store_false",
+                        help="Force-disable vLLM fast_inference (e.g. on T4).")
     args = parser.parse_args()
 
     if args.dry_run:
