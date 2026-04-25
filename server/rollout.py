@@ -135,16 +135,28 @@ def prompt_to_messages(prompt: str) -> List[Dict[str, str]]:
 
 def apply_chat_template_to_prompt(prompt: str, tokenizer) -> str:
     """Take a build_prompt-shaped string, re-wrap with the tokenizer's
-    actual chat template. Used by every LLM policy (eval, train, sft)."""
+    actual chat template. Used by every LLM policy (eval, train, sft).
+
+    For Qwen3 / other models with built-in thinking modes, disables
+    thinking — we want the model to emit ACTION:/TOOL:/ARGS: directly,
+    not burn tokens reasoning before answering. Falls back gracefully if
+    the tokenizer's template doesn't support the kwarg.
+    """
     if not (hasattr(tokenizer, "apply_chat_template")
             and getattr(tokenizer, "chat_template", None)):
         return prompt
     msgs = prompt_to_messages(prompt)
     if not msgs:
         return prompt
-    return tokenizer.apply_chat_template(
-        msgs, tokenize=False, add_generation_prompt=True,
-    )
+    try:
+        return tokenizer.apply_chat_template(
+            msgs, tokenize=False, add_generation_prompt=True,
+            enable_thinking=False,
+        )
+    except (TypeError, ValueError):
+        return tokenizer.apply_chat_template(
+            msgs, tokenize=False, add_generation_prompt=True,
+        )
 
 
 @dataclass
