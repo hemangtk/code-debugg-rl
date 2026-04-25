@@ -353,10 +353,13 @@ def run_grpo_training(args) -> None:  # pragma: no cover - GPU-only path
             _torch.cuda.is_available()
             and _torch.cuda.get_device_capability(0)[0] >= 8
         )
+        # Note: don't pass `max_prompt_length` — Unsloth 2025.9.x's
+        # GRPOConfig wrapper forwards it to a TRL GRPOConfig that doesn't
+        # accept the kwarg, causing TypeError at init. The default
+        # (model's max_seq_length) is fine for our prompts.
         config = GRPOConfig(
             output_dir=args.output_dir,
             num_generations=args.num_generations,
-            max_prompt_length=args.max_seq_length // 2,
             max_completion_length=args.max_new_tokens,
             learning_rate=args.lr,
             bf16=_supports_bf16,
