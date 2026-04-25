@@ -216,18 +216,29 @@ def run_grpo_training(args) -> None:  # pragma: no cover - GPU-only path
 
     # vLLM's torch.compile path breaks on compute capability < 8.0 (T4 = 7.5)
     # with "Tried to erase Node size_X but it still had N users". Auto-detect
-    # and disable fast_inference on those GPUs unless the user forces it.
+    # GPU + check vllm is installed; disable fast_inference if either fails.
     fast_inference = args.fast_inference
     if fast_inference is None:
         try:
             import torch as _torch
             cc = _torch.cuda.get_device_capability(0)
-            fast_inference = cc[0] >= 8
-            if not fast_inference:
-                print(f"[train] GPU compute capability {cc[0]}.{cc[1]} < 8.0 — "
-                      "disabling vLLM fast_inference (use --fast-inference to override).")
+            is_ampere_plus = cc[0] >= 8
         except Exception:
-            fast_inference = False
+            cc = (0, 0)
+            is_ampere_plus = False
+        try:
+            import vllm  # noqa: F401
+            has_vllm = True
+        except ImportError:
+            has_vllm = False
+        fast_inference = is_ampere_plus and has_vllm
+        if not fast_inference:
+            if not is_ampere_plus:
+                print(f"[train] GPU compute capability {cc[0]}.{cc[1]} < 8.0 — "
+                      "disabling vLLM fast_inference.")
+            elif not has_vllm:
+                print("[train] vllm package not installed — disabling fast_inference. "
+                      "(`pip install vllm` to enable; ~20% faster GRPO rollouts.)")
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model,

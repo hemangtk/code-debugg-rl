@@ -117,6 +117,22 @@ print(f"Uploaded artifacts to https://huggingface.co/{repo}")
 PY
 }
 
+push_artifacts_safe() {
+  # Best-effort artifact upload — don't fail the script if it errors.
+  # Also rsync any in-progress checkpoints into artifacts/ so they survive.
+  if [ -d ckpts/sft-warmup ]; then
+    cp -r ckpts/sft-warmup artifacts/ 2>/dev/null || true
+  fi
+  if [ -d ckpts/phase4-real ]; then
+    cp -r ckpts/phase4-real artifacts/ 2>/dev/null || true
+  fi
+  push_artifacts || echo "[warn] artifact upload failed (continuing)"
+}
+
+# Always attempt to save artifacts on exit, even on failure — protects
+# expensive SFT checkpoint if a later stage crashes.
+trap push_artifacts_safe EXIT
+
 case "$STAGE" in
   sft)        run_sft ;;
   sanity)     run_sanity ;;
@@ -133,5 +149,4 @@ case "$STAGE" in
   *)          echo "unknown STAGE: $STAGE" >&2; exit 1 ;;
 esac
 
-push_artifacts
 echo "=== done ==="
