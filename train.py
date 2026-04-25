@@ -146,8 +146,11 @@ def run_dry_run(num_episodes: int, output_log: str, seed: int = 0) -> None:
 
 
 def _make_llm_policy(model, tokenizer, max_new_tokens: int = 256):
+    from server.rollout import apply_chat_template_to_prompt
+
     def policy(prompt: str) -> str:
-        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+        text = apply_chat_template_to_prompt(prompt, tokenizer)
+        inputs = tokenizer(text, return_tensors="pt").to(model.device)
         out = model.generate(
             **inputs,
             max_new_tokens=max_new_tokens,
@@ -162,14 +165,23 @@ def _make_llm_policy(model, tokenizer, max_new_tokens: int = 256):
 
 
 def _trajectory_to_examples(
-    traj: Trajectory, gamma: float = 0.95
+    traj: Trajectory, gamma: float = 0.95, tokenizer=None,
 ) -> List[Dict]:
-    """Convert a trajectory into per-step (prompt, completion, return) tuples."""
+    """Convert a trajectory into per-step (prompt, completion, return) tuples.
+
+    If ``tokenizer`` is provided, prompts are re-templated through the
+    tokenizer's actual chat format so GRPO trains on the same shape the
+    model sees at inference time.
+    """
+    from server.rollout import apply_chat_template_to_prompt
     returns = traj.returns_to_go(gamma=gamma)
     examples = []
     for step, ret in zip(traj.steps, returns):
+        prompt = step.prompt
+        if tokenizer is not None:
+            prompt = apply_chat_template_to_prompt(prompt, tokenizer)
         examples.append({
-            "prompt": step.prompt,
+            "prompt": prompt,
             "completion": step.completion,
             "return": ret,
         })
@@ -243,7 +255,7 @@ def run_grpo_training(args) -> None:  # pragma: no cover - GPU-only path
         ep_summaries: List[Dict] = []
         for ep_i in range(args.rollouts_per_iter):
             traj = rollout_one_episode(env, policy, difficulty=stage_difficulty)
-            all_examples.extend(_trajectory_to_examples(traj, args.gamma))
+            all_examples.extend(_trajectory_to_examples(traj, args.gamma, tokenizer))
             ep_summaries.append({
                 "all_pass": traj.all_pass,
                 "caved": traj.caved,

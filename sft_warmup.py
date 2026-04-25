@@ -123,10 +123,23 @@ def train_sft(args) -> None:  # pragma: no cover - GPU-only
     print(f"[sft] loading dataset from {args.out}...")
     ds = load_dataset("json", data_files=args.out, split="train")
 
+    from server.rollout import prompt_to_messages
+
     def _format(example):
-        # Concatenate prompt + completion as a single sequence — SFT
-        # learns to reproduce the completion conditioned on the prompt.
-        return {"text": example["prompt"] + example["completion"]}
+        # Re-template the placeholder-token prompt through the tokenizer's
+        # actual chat format so SFT trains on the same shape the model
+        # sees at inference. Without this, the SFT'd model learns to
+        # respond to fake `<|user|>` tokens and produces garbage at eval.
+        msgs = prompt_to_messages(example["prompt"]) + [
+            {"role": "assistant", "content": example["completion"]},
+        ]
+        if hasattr(tokenizer, "apply_chat_template") and getattr(tokenizer, "chat_template", None):
+            text = tokenizer.apply_chat_template(
+                msgs, tokenize=False, add_generation_prompt=False,
+            )
+        else:
+            text = example["prompt"] + example["completion"]
+        return {"text": text}
 
     ds = ds.map(_format)
 

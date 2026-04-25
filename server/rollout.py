@@ -74,10 +74,25 @@ def format_observation(obs: Observation) -> str:
     return "\n\n".join(pieces)
 
 
+def build_messages(history: List[Dict], current_obs: Observation) -> List[Dict[str, str]]:
+    """Build OpenAI-style chat messages for the current state.
+
+    Use ``apply_chat_template`` on these — never feed the
+    placeholder-token form directly to a tokenizer that has its own
+    chat format.
+    """
+    msgs: List[Dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    for turn in history:
+        msgs.append({"role": "user", "content": turn["obs_text"]})
+        msgs.append({"role": "assistant", "content": turn["completion"]})
+    msgs.append({"role": "user", "content": format_observation(current_obs)})
+    return msgs
+
+
 def build_prompt(history: List[Dict], current_obs: Observation) -> str:
-    """Build a chat-style prompt from prior (observation, completion) pairs
-    plus the current observation. Format is intentionally model-agnostic
-    — use whatever chat template your tokenizer expects on top of this.
+    """Legacy placeholder-token form. Kept for the heuristic dry-run path
+    where there's no real tokenizer; new code should use build_messages
+    + tokenizer.apply_chat_template.
     """
     lines = [f"<|system|>\n{SYSTEM_PROMPT}"]
     for turn in history:
@@ -86,6 +101,50 @@ def build_prompt(history: List[Dict], current_obs: Observation) -> str:
     lines.append(f"<|user|>\n{format_observation(current_obs)}")
     lines.append("<|assistant|>\n")
     return "\n".join(lines)
+
+
+def render_prompt(history: List[Dict], current_obs: Observation, tokenizer) -> str:
+    """Render the current state into the tokenizer's actual chat format.
+
+    Falls back to build_prompt's placeholder-token form if the tokenizer
+    has no chat template (very rare for modern HF models).
+    """
+    msgs = build_messages(history, current_obs)
+    if hasattr(tokenizer, "apply_chat_template") and getattr(tokenizer, "chat_template", None):
+        return tokenizer.apply_chat_template(
+            msgs, tokenize=False, add_generation_prompt=True,
+        )
+    return build_prompt(history, current_obs)
+
+
+def prompt_to_messages(prompt: str) -> List[Dict[str, str]]:
+    """Inverse of build_prompt: parse placeholder-token text back into
+    chat messages so a policy can re-template through the real tokenizer.
+    """
+    import re
+    text = re.sub(r"<\|assistant\|>\s*$", "", prompt.rstrip()).rstrip()
+    parts = re.split(r"<\|(system|user|assistant)\|>\n?", text)
+    messages: List[Dict[str, str]] = []
+    for i in range(1, len(parts), 2):
+        role = parts[i]
+        content = parts[i + 1].strip() if i + 1 < len(parts) else ""
+        if content:
+            messages.append({"role": role, "content": content})
+    return messages
+
+
+def apply_chat_template_to_prompt(prompt: str, tokenizer) -> str:
+    """Take a build_prompt-shaped string, re-wrap with the tokenizer's
+    actual chat template. Used by every LLM policy (eval, train, sft)."""
+    if not (hasattr(tokenizer, "apply_chat_template")
+            and getattr(tokenizer, "chat_template", None)):
+        return prompt
+    msgs = prompt_to_messages(prompt)
+    if not msgs:
+        return prompt
+    return tokenizer.apply_chat_template(
+        msgs, tokenize=False, add_generation_prompt=True,
+    )
 
 
 @dataclass

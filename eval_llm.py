@@ -68,12 +68,19 @@ def _load_model(model_path: str, device: str = "auto", load_in_4bit: bool = Fals
 
 
 def _make_llm_policy(model, tokenizer, max_new_tokens: int = 256, temperature: float = 0.7):
-    """Wrap a HF model into a (prompt -> completion) callable."""
+    """Wrap a HF model into a (prompt -> completion) callable.
+
+    Re-templates build_prompt's placeholder tokens through the tokenizer's
+    actual chat format — without this, Qwen sees the fake `<|user|>` /
+    `<|assistant|>` markers as literal text and hallucinates extra turns.
+    """
     import torch
+    from server.rollout import apply_chat_template_to_prompt
 
     @torch.no_grad()
     def policy(prompt: str) -> str:
-        inputs = tokenizer(prompt, return_tensors="pt", truncation=True,
+        text = apply_chat_template_to_prompt(prompt, tokenizer)
+        inputs = tokenizer(text, return_tensors="pt", truncation=True,
                            max_length=2048).to(model.device)
         out = model.generate(
             **inputs,
