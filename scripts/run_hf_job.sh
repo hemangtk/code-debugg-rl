@@ -31,6 +31,16 @@ cd /tmp
 git clone "$GITHUB_REPO_URL" code-debugg-rl
 cd code-debugg-rl
 
+# Triton JIT-compiles CUDA kernels at runtime (used by Unsloth's fused
+# RMSNorm). The pytorch -runtime image has no C compiler, so the first
+# kernel call dies with "Failed to find C compiler". Install build-essential
+# before pip so any compile-from-source wheels also work.
+echo "[setup] installing build-essential for Triton JIT"
+apt-get update -qq && apt-get install -y --no-install-recommends \
+  build-essential gcc g++ \
+  > /tmp/apt.log 2>&1 || { echo "[fatal] apt install failed"; cat /tmp/apt.log; exit 1; }
+export CC=gcc CXX=g++
+
 pip install --no-cache-dir -r requirements-train.txt
 
 # After the train deps install, torch may have been upgraded by transitive
