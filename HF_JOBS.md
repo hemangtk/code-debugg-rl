@@ -26,7 +26,7 @@ hf jobs run \
   --flavor a10g-large \
   --secrets HF_TOKEN=$(hf auth token) \
   --env HF_USER=YOUR_HF_USERNAME \
-  --env GITHUB_REPO_URL=https://github.com/YOUR_GH_USERNAME/code-debugg-rl.git \
+  --env GITHUB_REPO_URL=https://github.com/YOUR_GH_USERNAME/code-debugg-rl \
   --env STAGE=all \
   --env OUTER_ITERATIONS=100 \
   pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime \
@@ -48,7 +48,7 @@ If you want to iterate without paying for the whole pipeline each time, set `STA
 hf jobs run --flavor a10g-large \
   --secrets HF_TOKEN=$(hf auth token) \
   --env HF_USER=hemangtk \
-  --env GITHUB_REPO_URL=https://github.com/hemangtk/code-debugg-rl.git \
+  --env GITHUB_REPO_URL=https://github.com/hemangtk/code-debugg-rl \
   --env STAGE=baseline \
   pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime \
   bash -lc "apt-get update -qq && apt-get install -y -qq curl ca-certificates && curl -sSL \$GITHUB_REPO_URL/raw/main/scripts/run_hf_job.sh | bash"
