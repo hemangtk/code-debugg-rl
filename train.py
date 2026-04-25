@@ -334,13 +334,22 @@ def run_grpo_training(args) -> None:  # pragma: no cover - GPU-only path
         prompts = [{"prompt": ex["prompt"]} for ex in all_examples]
         ds = Dataset.from_list(prompts)
 
+        # T4 (Turing, compute capability 7.5) doesn't support bf16 — only
+        # Ampere+ does. Detect and fall back to fp16. Both are valid for
+        # GRPO; bf16 is just preferred when available for numerical range.
+        import torch as _torch
+        _supports_bf16 = (
+            _torch.cuda.is_available()
+            and _torch.cuda.get_device_capability(0)[0] >= 8
+        )
         config = GRPOConfig(
             output_dir=args.output_dir,
             num_generations=args.num_generations,
             max_prompt_length=args.max_seq_length // 2,
             max_completion_length=args.max_new_tokens,
             learning_rate=args.lr,
-            bf16=True,
+            bf16=_supports_bf16,
+            fp16=not _supports_bf16,
             per_device_train_batch_size=1,
             gradient_accumulation_steps=args.grad_accum,
             max_steps=1,  # one training step per outer iteration
